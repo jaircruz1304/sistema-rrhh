@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 
 export default function ReporteAsistencia() {
-  const [marcaciones, setMarcaciones] = useState([]);
+  const [marcaciones, setMarcaciones] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filtros, setFiltros] = useState({
     mes: new Date().getMonth() + 1,

@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect } from 'react';
-import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { FiDownload, FiPlay, FiSearch, FiUser, FiCalendar, FiClock } from 'react-icons/fi';
@@ -37,7 +36,9 @@ export default function PaginaReporteCompleta() {
     try {
       const res = await fetch(`/api/reportes?${new URLSearchParams(filtros)}`);
       const data = await res.json();
-      setReporte(data);
+      if (res.ok) {
+        setReporte(data);
+      }
     } catch (e) {
       console.error("Error al cargar datos");
     } finally {
@@ -46,312 +47,229 @@ export default function PaginaReporteCompleta() {
   };
 
   const exportarExcelFiasInstitucional = async () => {
-  const workbook = new ExcelJS.Workbook();
-  
-  // Agrupamos por funcionario para crear las pestañas
-  const funcionariosUnicos = [...new Set(reporte.map((r: any) => r.empleado))];
+    const workbook = new ExcelJS.Workbook();
+    const funcionariosUnicos = [...new Set(reporte.map((r: any) => r.empleado))];
 
-  for (const nombreFuncionario of funcionariosUnicos) {
-    const sheet = workbook.addWorksheet(nombreFuncionario.substring(0, 31));
-    const datos = reporte.filter((r: any) => r.empleado === nombreFuncionario);
-    const cargo = datos[0]?.cargo || 'N/A';
+    for (const nombreFuncionario of funcionariosUnicos) {
+      const sheet = workbook.addWorksheet(nombreFuncionario.substring(0, 31));
+      
+      // --- MODIFICACIÓN PARA EVITAR ERROR DE COMPILACIÓN ---
+      // Forzamos a que 'datos' sea tratado como un array de objetos (any[])
+      const datos = reporte.filter((r: any) => r.empleado === nombreFuncionario) as any[];
+      const cargo = datos[0]?.cargo || 'N/A';
+      // ----------------------------------------------------
 
-    // CONFIGURACIÓN DE COLUMNAS (Anchos fieles a la plantilla)
-    sheet.columns = [
-      { header: 'FECHA', key: 'fecha', width: 12 },
-      { header: 'DÍA', key: 'dia', width: 12 },
-      { header: 'NOVEDAD', key: 'novedad', width: 15 },
-      { header: 'DETALLE', key: 'detalle', width: 15 },
-      { header: 'BIOMÉTRICO', key: 'bio', width: 15 },
-      { header: 'INICIO REAL', key: 'ini_real', width: 15 },
-      { header: 'FIN JORNADA', key: 'fin', width: 15 },
-      { header: 'INI DESCANSO', key: 'ini_desc', width: 12 },
-      { header: 'FIN DESCANSO', key: 'fin_desc', width: 12 },
-      { header: 'T. DESC. BIO', key: 't_desc_b', width: 12 },
-      { header: 'TOTAL DESC.', key: 't_desc', width: 12 },
-      { header: 'H. TRABAJADAS', key: 'h_trab', width: 15 },
-      { header: 'EXTRAS', key: 'extras', width: 10 },
-      { header: 'H. MENOS', key: 'menos', width: 10 },
-      { header: 'OBSERVACIONES', key: 'obs', width: 30 },
-    ];
+      // Configuración de Columnas
+      sheet.columns = [
+        { header: 'FECHA', key: 'fecha', width: 12 },
+        { header: 'DÍA', key: 'dia', width: 12 },
+        { header: 'NOVEDAD', key: 'novedad', width: 15 },
+        { header: 'DETALLE', key: 'detalle', width: 15 },
+        { header: 'BIOMÉTRICO', key: 'bio', width: 15 },
+        { header: 'INICIO REAL', key: 'ini_real', width: 15 },
+        { header: 'FIN JORNADA', key: 'fin', width: 15 },
+        { header: 'INI DESCANSO', key: 'ini_desc', width: 12 },
+        { header: 'FIN DESCANSO', key: 'fin_desc', width: 12 },
+        { header: 'T. DESC. BIO', key: 't_desc_b', width: 12 },
+        { header: 'TOTAL DESC.', key: 't_desc', width: 12 },
+        { header: 'H. TRABAJADAS', key: 'h_trab', width: 15 },
+        { header: 'EXTRAS', key: 'extras', width: 10 },
+        { header: 'H. MENOS', key: 'menos', width: 10 },
+        { header: 'OBSERVACIONES', key: 'obs', width: 30 },
+      ];
 
-    // --- ENCABEZADO INSTITUCIONAL ---
-    sheet.mergeCells('A1:O1');
-    const title = sheet.getCell('A1');
-    title.value = 'FONDO DE INVERSIÓN AMBIENTAL SOSTENIBLE - FIAS';
-    title.font = { name: 'Arial', size: 14, bold: true, color: { argb: '4472C4' } };
-    title.alignment = { horizontal: 'center' };
+      // Encabezado Institucional
+      sheet.mergeCells('A1:O1');
+      const title = sheet.getCell('A1');
+      title.value = 'FONDO DE INVERSIÓN AMBIENTAL SOSTENIBLE - FIAS';
+      title.font = { name: 'Arial', size: 14, bold: true, color: { argb: '4472C4' } };
+      title.alignment = { horizontal: 'center' };
 
-    sheet.mergeCells('A2:O2');
-    sheet.getCell('A2').value = 'REGISTRO MENSUAL DE ASISTENCIA Y PERMANENCIA';
-    sheet.getCell('A2').alignment = { horizontal: 'center' };
-    sheet.getCell('A2').font = { bold: true };
+      sheet.mergeCells('A2:O2');
+      sheet.getCell('A2').value = 'REGISTRO MENSUAL DE ASISTENCIA Y PERMANENCIA';
+      sheet.getCell('A2').alignment = { horizontal: 'center' };
+      sheet.getCell('A2').font = { bold: true };
 
-    // BLOQUE DE DATOS DEL FUNCIONARIO
-    sheet.getCell('A4').value = 'FUNCIONARIO:';
-    sheet.getCell('B4').value = nombreFuncionario;
-    sheet.getCell('A5').value = 'CARGO:';
-    sheet.getCell('B5').value = cargo;
-    sheet.getCell('L4').value = 'MES:';
-    sheet.getCell('M4').value = filtros.mes;
-    sheet.getCell('L5').value = 'AÑO:';
-    sheet.getCell('M5').value = filtros.anio;
-    ['A4', 'A5', 'L4', 'L5'].forEach(c => sheet.getCell(c).font = { bold: true });
+      // Datos Funcionario
+      sheet.getCell('A4').value = 'FUNCIONARIO:';
+      sheet.getCell('B4').value = nombreFuncionario;
+      sheet.getCell('A5').value = 'CARGO:';
+      sheet.getCell('B5').value = cargo;
+      sheet.getCell('L4').value = 'MES:';
+      sheet.getCell('M4').value = filtros.mes;
+      sheet.getCell('L5').value = 'AÑO:';
+      sheet.getCell('M5').value = filtros.anio;
+      ['A4', 'A5', 'L4', 'L5'].forEach(c => sheet.getCell(c).font = { bold: true });
 
-    // --- FILA DE ENCABEZADOS DE TABLA (Fila 7) ---
-    const nombresCabeceras = [
-      'FECHA', 
-      'DÍA', 
-      'NOVEDAD', 
-      'DETALLE', 
-      'BIOMÉTRICO (E)', 
-      'INICIO JORNADA REAL', 
-      'FIN JORNADA', 
-      'INI DESCANSO', 
-      'FIN DESCANSO', 
-      'T. DESC. BIO', 
-      'TOTAL DESC.', 
-      'H. TRABAJADAS', 
-      'EXTRAS', 
-      'H. MENOS', 
-      'OBSERVACIONES'
-    ];
-
-    // 2. Acceder a la fila 7 y asignar los valores
-    const headerRow = sheet.getRow(7);
-    headerRow.values = nombresCabeceras;
-    headerRow.height = 35; // Altura suficiente para texto con ajuste
-
-    // 3. Aplicar el estilo Institucional FIAS a cada celda de la cabecera
-    headerRow.eachCell((cell) => {
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: '4472C4' } // Azul Institucional
-      };
-      cell.font = {
-        color: { argb: 'FFFFFF' }, // Texto Blanco
-        bold: true,
-        size: 9,
-        name: 'Arial'
-      };
-      cell.alignment = {
-        vertical: 'middle',
-        horizontal: 'center',
-        wrapText: true // Permitir que el texto se parta en dos líneas
-      };
-      cell.border = {
-        top: { style: 'thin' },
-        left: { style: 'thin' },
-        bottom: { style: 'thin' },
-        right: { style: 'thin' }
-      };
-    });
-
-    // IMPORTANTE: Mapear los datos para que coincidan con estas columnas
-    datos.forEach((r: any) => {
-      const row = sheet.addRow([
-        r.fecha,
-        new Date(r.fecha + 'T00:00:00').toLocaleDateString('es-EC', { weekday: 'long' }),
-        r.novedad,
-        (r.novedad === 'LIBRE' || r.novedad === 'FIN DE SEMANA') ? 'NO LABORABLE' : 'LABORAL',
-        r.biometrico,
-        r.inicio_real,
-        r.fin_jornada,
-        r.ini_descanso,
-        r.fin_descanso,
-        '01:00:00', // Descanso Biométrico fijo
-        '01:00:00', // Total Descanso fijo
-        r.horas_trabajadas,
-        r.horas_extras,
-        r.horas_menos,
-        r.novedad === 'ATRASO' ? 'EXCEDE TOLERANCIA 08:45' : ''
-      ]);
-
-         // Estilos por fila
-      row.eachCell((cell, colNumber) => {
-        cell.font = { size: 9 };
+      // Estilo Cabecera Tabla (Fila 7)
+      const headerRow = sheet.getRow(7);
+      headerRow.values = ['FECHA', 'DÍA', 'NOVEDAD', 'DETALLE', 'BIOMÉTRICO (E)', 'INICIO JORNADA REAL', 'FIN JORNADA', 'INI DESCANSO', 'FIN DESCANSO', 'T. DESC. BIO', 'TOTAL DESC.', 'H. TRABAJADAS', 'EXTRAS', 'H. MENOS', 'OBSERVACIONES'];
+      headerRow.height = 35;
+      headerRow.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '4472C4' } };
+        cell.font = { color: { argb: 'FFFFFF' }, bold: true, size: 9 };
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
         cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
-        cell.alignment = { horizontal: 'center' };
-
-        // Colorear Fines de semana / Feriados en gris
-        if (r.novedad === 'LIBRE') {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
-          cell.font = { color: { argb: 'A6A6A6' }, size: 9 };
-        }
-
-        // Columnas Amarillas (Inicio/Fin Jornada)
-        if ((colNumber === 6 || colNumber === 7) && r.novedad !== 'LIBRE') {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2CC' } };
-        }
-        
-        // Columna Horas Menos (Rosado alerta)
-        if (colNumber === 14 && r.horas_menos !== '00:00:00' && r.novedad !== 'LIBRE') {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FCE4D6' } };
-          cell.font = { color: { argb: '9C0006' }, bold: true };
-        }
       });
-    });
 
-    // --- CUADRO DE FIRMAS (Al final de la tabla) ---
-    const ultimaFila = 7 + datos.length + 3;
-    
-    sheet.mergeCells(`B${ultimaFila}:E${ultimaFila}`);
-    sheet.getCell(`B${ultimaFila}`).value = '__________________________';
-    sheet.getCell(`B${ultimaFila + 1}`).value = 'ELABORADO POR (F):';
-    sheet.getCell(`B${ultimaFila + 2}`).value = nombreFuncionario;
+      // Mapeo de Datos
+      datos.forEach((r: any) => {
+        const row = sheet.addRow([
+          r.fecha,
+          new Date(r.fecha + 'T00:00:00').toLocaleDateString('es-EC', { weekday: 'long' }),
+          r.novedad,
+          r.novedad === 'LIBRE' ? 'NO LABORABLE' : 'LABORAL',
+          r.biometrico,
+          r.inicio_real,
+          r.fin_jornada,
+          r.ini_descanso,
+          r.fin_descanso,
+          r.total_descanso,
+          '01:00:00', // Total descanso fijo institucional
+          r.horas_trabajadas,
+          r.horas_extras,
+          r.horas_menos,
+          r.novedad === 'ATRASO' ? 'EXCEDE TOLERANCIA 08:45' : ''
+        ]);
 
-    sheet.mergeCells(`K${ultimaFila}:N${ultimaFila}`);
-    sheet.getCell(`K${ultimaFila}`).value = '__________________________';
-    sheet.getCell(`K${ultimaFila + 1}`).value = 'VALIDADO POR (F):';
-    sheet.getCell(`K${ultimaFila + 2}`).value = 'TALENTO HUMANO / RESPONSABLE';
+        row.eachCell((cell, colNumber) => {
+          cell.font = { size: 9 };
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+          
+          if (r.novedad === 'LIBRE') {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
+          }
+          if ((colNumber === 6 || colNumber === 7) && r.novedad !== 'LIBRE') {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2CC' } };
+          }
+        });
+      });
 
-    [sheet.getCell(`B${ultimaFila + 1}`), sheet.getCell(`K${ultimaFila + 1}`)].forEach(c => {
-      c.font = { bold: true, size: 9 };
-      c.alignment = { horizontal: 'center' };
-    });
-  }
+      // Firmas
+      const ultimaFila = 7 + datos.length + 3;
+      sheet.getCell(`B${ultimaFila}`).value = '__________________________';
+      sheet.getCell(`B${ultimaFila + 1}`).value = 'ELABORADO POR (F):';
+      sheet.getCell(`B${ultimaFila + 2}`).value = nombreFuncionario;
+      sheet.getCell(`K${ultimaFila}`).value = '__________________________';
+      sheet.getCell(`K${ultimaFila + 1}`).value = 'VALIDADO POR (F):';
+      sheet.getCell(`K${ultimaFila + 2}`).value = 'TALENTO HUMANO / RESPONSABLE';
+    }
 
-  // Generar y descargar
-  const buffer = await workbook.xlsx.writeBuffer();
-  saveAs(new Blob([buffer]), `REPORTE_INSTITUCIONAL_FIAS_${filtros.anio}_${filtros.mes}.xlsx`);
-};
+    const buffer = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), `REPORTE_ASISTENCIA_${filtros.anio}_${filtros.mes}.xlsx`);
+  };
 
   const dataFiltrada = reporte.filter((r: any) => 
     r.empleado.toLowerCase().includes(busqueda.toLowerCase())
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 md:p-8 font-sans text-slate-900">
-      <div className="max-w-[1900px] mx-auto space-y-4">
+    <div className="min-h-screen bg-[#f8fafc] p-4 md:p-10 font-sans">
+      <div className="max-w-[1600px] mx-auto space-y-6">
         
-        {/* CABECERA INSTITUCIONAL */}
-        <div className="bg-white rounded-2xl shadow-sm p-6 border-l-[12px] border-[#4472C4] flex flex-col md:flex-row justify-between items-center gap-4">
+        {/* Header Superior */}
+        <div className="bg-white rounded-[2rem] shadow-xl shadow-blue-900/5 p-8 border-l-[12px] border-[#4472C4] flex flex-col md:flex-row justify-between items-center gap-6">
           <div>
-            <h1 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">Sistema de Asistencia FIAS</h1>
-            <p className="text-[#4472C4] font-bold text-xs tracking-widest uppercase tracking-widest">Control Ecuador 2025/2026 - Tolerancia 15 min</p>
+            <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase">Panel de <span className="text-[#4472C4]">Asistencia</span></h1>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="bg-emerald-100 text-emerald-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Ecuador 2026</span>
+              <span className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Tolerancia Activa: 15 min</span>
+            </div>
           </div>
           <button 
             onClick={exportarExcelFiasInstitucional} 
             disabled={reporte.length === 0}
-            className="bg-[#1D6F42] hover:bg-[#155231] text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-transform active:scale-95 disabled:opacity-30"
+            className="bg-[#1D6F42] hover:bg-[#155231] text-white px-10 py-4 rounded-2xl font-black text-xs flex items-center gap-3 shadow-lg shadow-emerald-900/20 transition-all active:scale-95 disabled:opacity-20"
           >
-            <FiDownload size={20} /> EXPORTAR HOJA GLOBAL
+            <FiDownload size={18} /> EXPORTAR EXCEL INSTITUCIONAL
           </button>
         </div>
 
-        {/* BARRA DE FILTROS */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+        {/* Filtros Inteligentes */}
+        <div className="bg-white p-6 rounded-[2rem] shadow-sm grid grid-cols-1 md:grid-cols-12 gap-4 items-end border border-slate-100">
           <div className="md:col-span-4">
-            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block flex items-center gap-1"><FiUser size={12}/> Funcionario</label>
-            <select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-slate-700 shadow-sm" value={filtros.funcionarioId} onChange={e => setFiltros({...filtros, funcionarioId: e.target.value})}>
-              <option value="todos">-- TODOS LOS FUNCIONARIOS --</option>
-              {funcionarios.map((f: any) => <option key={f.funcionario_id} value={f.funcionario_id}>{f.apellidos} {f.nombres}</option>)}
-            </select>
+            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-2">Funcionario Seleccionado</label>
+            <div className="relative">
+              <FiUser className="absolute left-4 top-3.5 text-slate-400" />
+              <select className="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm text-slate-700 outline-none focus:ring-2 ring-blue-500/20 transition-all" value={filtros.funcionarioId} onChange={e => setFiltros({...filtros, funcionarioId: e.target.value})}>
+                <option value="todos">Todos los Colaboradores</option>
+                {funcionarios.map((f: any) => <option key={f.funcionario_id} value={f.funcionario_id}>{f.apellidos} {f.nombres}</option>)}
+              </select>
+            </div>
           </div>
           <div className="md:col-span-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block flex items-center gap-1"><FiCalendar size={12}/> Año</label>
-            <select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-slate-700" value={filtros.anio} onChange={e => setFiltros({...filtros, anio: e.target.value})}>
-              {anios.map(a => <option key={a} value={a}>{a}</option>)}
-            </select>
+             <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-2">Periodo / Año</label>
+             <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm text-slate-700 outline-none" value={filtros.anio} onChange={e => setFiltros({...filtros, anio: e.target.value})}>
+               {anios.map(a => <option key={a} value={a}>{a}</option>)}
+             </select>
           </div>
           <div className="md:col-span-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block flex items-center gap-1"><FiClock size={12}/> Mes</label>
-            <select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-slate-700" value={filtros.mes} onChange={e => setFiltros({...filtros, mes: e.target.value})}>
-              {meses.map(m => <option key={m.v} value={m.v}>{m.n}</option>)}
-            </select>
+             <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block ml-2">Mes de Reporte</label>
+             <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-sm text-slate-700 outline-none" value={filtros.mes} onChange={e => setFiltros({...filtros, mes: e.target.value})}>
+               {meses.map(m => <option key={m.v} value={m.v}>{m.n}</option>)}
+             </select>
           </div>
           <div className="md:col-span-2">
-            <button onClick={generarData} className="w-full bg-[#4472C4] text-white py-3.5 rounded-xl font-black text-[11px] uppercase hover:bg-slate-900 transition-all flex items-center justify-center gap-2 shadow-md">
-              {loading ? 'PROCESANDO...' : <><FiPlay /> GENERAR</>}
+            <button onClick={generarData} disabled={loading} className="w-full bg-[#4472C4] text-white py-4 rounded-2xl font-black text-[11px] uppercase hover:bg-slate-900 transition-all shadow-lg shadow-blue-900/10 flex items-center justify-center gap-2">
+              {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/> : <><FiPlay /> GENERAR</>}
             </button>
           </div>
           <div className="md:col-span-2">
              <div className="relative">
-                <FiSearch className="absolute left-3 top-3 text-slate-400" />
-                <input type="text" placeholder="Filtrar nombre..." className="w-full pl-9 pr-3 py-3 bg-slate-100 border-none rounded-xl text-xs font-bold text-slate-600 outline-none" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+                <FiSearch className="absolute left-4 top-4 text-slate-400" />
+                <input type="text" placeholder="Buscar..." className="w-full pl-11 pr-4 py-3.5 bg-slate-100 border-none rounded-2xl text-sm font-bold text-slate-600 outline-none placeholder:text-slate-400" value={busqueda} onChange={e => setBusqueda(e.target.value)} />
              </div>
           </div>
         </div>
 
-        {/* TABLA GLOBAL */}
-        <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
-          <div className="overflow-x-auto max-h-[700px]">
-            <table className="w-full text-center border-collapse text-[10.5px]">
+        {/* Tabla de Resultados */}
+        <div className="bg-white rounded-[2.5rem] shadow-2xl border border-slate-200 overflow-hidden">
+          <div className="overflow-x-auto max-h-[650px]">
+            <table className="w-full text-center border-collapse text-[11px]">
               <thead>
-                <tr className="bg-[#4472C4] text-white font-bold uppercase divide-x divide-white/20 sticky top-0 z-20">
-                  <th className="p-3 w-16">Fecha</th>
-                  <th className="p-3 w-20">Día</th>
-                  <th className="p-3 w-24">Novedad</th>
-                  <th className="p-3 w-24">Detalle</th>
-                  <th className="p-3 w-24 bg-[#3359a1]">Biométrico (E)</th>
-                  <th className="p-3 w-24 bg-[#f7e4a6] text-slate-900">In. Jornada Real</th>
-                  <th className="p-3 w-24 bg-[#f7e4a6] text-slate-900">Fin Jornada</th>
-                  <th className="p-3 w-24">In. Descanso</th>
-                  <th className="p-3 w-24">Fin Descanso</th>
-                  <th className="p-3 w-24 bg-[#cedef0] text-slate-900">Tot. Descanso</th>
-                  <th className="p-3 w-24 bg-[#f5d4a4] text-slate-900 font-bold uppercase">Total Descanso</th>
-                  <th className="p-3 w-24 bg-[#3359a1]">H. Trabajadas</th>
-                  <th className="p-3 w-24 bg-[#FFE699] text-slate-900">Extras</th>
-                  <th className="p-3 w-24 bg-[#FFD966] text-red-900">H. Menos</th>
-                  <th className="p-3">Observaciones</th>
+                <tr className="bg-[#4472C4] text-white font-bold uppercase sticky top-0 z-30 shadow-md">
+                  <th className="p-4 w-20">Fecha</th>
+                  <th className="p-4 w-24">Día</th>
+                  <th className="p-4 w-32">Novedad</th>
+                  <th className="p-4 w-24 bg-blue-700/30">Bio (E)</th>
+                  <th className="p-4 w-24 bg-[#facc15] text-slate-900">In. Jornada</th>
+                  <th className="p-4 w-24 bg-[#facc15] text-slate-900">Fin Jornada</th>
+                  <th className="p-4 w-24">In. Descanso</th>
+                  <th className="p-4 w-24">Fin Descanso</th>
+                  <th className="p-4 w-28 bg-emerald-600/10 text-emerald-800">H. Trab</th>
+                  <th className="p-4 w-20 text-rose-300">Menos</th>
+                  <th className="p-4">Observaciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-bold text-slate-800">
+              <tbody className="divide-y divide-slate-100">
                 {dataFiltrada.map((r: any, i) => {
-                  const dObj = new Date(r.fecha + 'T00:00:00');
-                  const nDia = dObj.toLocaleDateString('es-EC', { weekday: 'long' });
-                  
-                  // Detección de estados para colores
                   const esLibre = r.novedad === 'LIBRE' || r.novedad === 'FIN DE SEMANA';
-                  const esAtrasoReal = r.novedad === 'ATRASO';
+                  const esAtraso = r.novedad === 'ATRASO';
                   const esTolerancia = r.novedad === 'NORMAL (TOLERANCIA)';
 
-                  let colorNovedad = "text-emerald-700 bg-emerald-50";
-                  let colorInicioReal = "bg-[#FFF2CC] text-slate-900"; // Amarillo FIAS
-
-                  if (esLibre) {
-                    colorNovedad = "text-slate-400 bg-slate-50";
-                    colorInicioReal = "bg-transparent text-slate-400 font-normal";
-                  } else if (esAtrasoReal) {
-                    colorNovedad = "text-red-700 bg-red-50";
-                    colorInicioReal = "bg-red-600 text-white animate-pulse";
-                  } else if (esTolerancia) {
-                    colorNovedad = "text-emerald-700 bg-emerald-50"; // Se muestra como normal
-                    colorInicioReal = "bg-[#FFF2CC] text-slate-900"; // Amarillo sin alerta
-                  } else if (r.novedad === 'SIN REGISTRO') {
-                    colorNovedad = "text-slate-500 bg-slate-50";
-                    colorInicioReal = "bg-slate-100 text-slate-400 italic";
-                  }
-
                   return (
-                    <tr key={i} className={`hover:bg-blue-50/50 transition-colors ${esLibre ? 'bg-slate-50 text-slate-400' : 'bg-white'}`}>
-                      <td className="p-2.5 border-r border-slate-100">{r.fecha.split('-').reverse().slice(0,2).join('. ')}</td>
-                      <td className="p-2.5 border-r border-slate-100 lowercase font-medium italic">{nDia}</td>
-                      <td className={`p-2.5 border-r border-slate-100 uppercase text-[9px] ${colorNovedad}`}>
-                        {esLibre ? 'NO LABORABLE' : (esTolerancia ? 'NORMAL' : r.novedad)}
+                    <tr key={i} className={`group hover:bg-slate-50 transition-colors ${esLibre ? 'bg-slate-50/50 text-slate-400' : 'bg-white text-slate-700'}`}>
+                      <td className="p-3 border-r border-slate-50 font-medium">{r.fecha.split('-').reverse().slice(0,2).join('/')}</td>
+                      <td className="p-3 border-r border-slate-50 lowercase italic font-medium">{new Date(r.fecha + 'T00:00:00').toLocaleDateString('es-EC', { weekday: 'long' })}</td>
+                      <td className="p-3 border-r border-slate-50">
+                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${
+                          esLibre ? 'bg-slate-200 text-slate-500' : 
+                          esAtraso ? 'bg-rose-100 text-rose-600' : 
+                          esTolerancia ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {esTolerancia ? 'NORMAL (T)' : r.novedad}
+                        </span>
                       </td>
-                      <td className="p-2.5 border-r border-slate-100 uppercase text-[8px] font-bold">
-                        {esLibre ? 'LIBRE' : (r.novedad === 'SIN REGISTRO' ? 'NO LABORADO' : 'TRABAJO')}
-                      </td>
-                      <td className="p-2.5 border-r border-slate-100 text-[#4472C4] font-black">{r.biometrico}</td>
-                      
-                      {/* CELDA DE INICIO JORNADA REAL */}
-                      <td className={`p-2.5 border-r border-slate-100 font-black ${colorInicioReal}`}>
-                        {r.inicio_real}
-                      </td>
-
-                      <td className="p-2.5 border-r border-slate-100 bg-[#FFF2CC] text-slate-900">{r.fin_jornada}</td>
-                      <td className="p-2.5 border-r border-slate-100 text-slate-400 font-normal italic">{r.ini_descanso}</td>
-                      <td className="p-2.5 border-r border-slate-100 text-slate-400 font-normal italic">{r.fin_descanso}</td>
-                      <td className="p-2.5 border-r border-slate-100 bg-[#DDEBF7] text-slate-800 font-bold">{r.total_descanso}</td>
-                      <td className="p-2.5 border-r border-slate-100 bg-[#FCE4D6] text-red-700 font-black uppercase">1:00:00</td>
-                      <td className="p-2.5 border-r border-slate-100 bg-slate-50 font-black text-slate-900 text-[12px]">{r.horas_trabajadas}</td>
-                      <td className="p-2.5 border-r border-slate-100 bg-[#FFE699] text-slate-900 font-bold">{r.horas_extras}</td>
-                      <td className="p-2.5 border-r border-slate-100 bg-[#FFD966] text-red-900 font-bold">{r.horas_menos}</td>
-                      
-                      <td className={`p-2.5 text-[9px] font-black ${esAtrasoReal ? 'bg-[#F4B084] text-slate-900' : 'text-slate-400 font-normal italic'}`}>
-                        {esLibre ? 'Feriado / Fin de semana' : (esTolerancia ? 'Rango tolerancia' : r.novedad)}
+                      <td className="p-3 border-r border-slate-50 font-black text-blue-600">{r.biometrico}</td>
+                      <td className={`p-3 border-r border-slate-100 font-black ${esAtraso ? 'text-rose-600' : 'text-slate-900'}`}>{r.inicio_real}</td>
+                      <td className="p-3 border-r border-slate-100 font-black text-slate-900">{r.fin_jornada}</td>
+                      <td className="p-3 border-r border-slate-50 text-slate-400 italic">{r.ini_descanso}</td>
+                      <td className="p-3 border-r border-slate-50 text-slate-400 italic">{r.fin_descanso}</td>
+                      <td className="p-3 border-r border-slate-50 bg-emerald-50/30 font-black text-emerald-700 text-xs">{r.horas_trabajadas}</td>
+                      <td className={`p-3 border-r border-slate-50 font-bold ${r.horas_menos !== '00:00:00' ? 'text-rose-600' : 'text-slate-300'}`}>{r.horas_menos}</td>
+                      <td className="p-3 text-left pl-6 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                        {esAtraso ? 'Excede 15 min de gracia' : r.novedad === 'SIN REGISTRO' ? 'Falta de marcación' : ''}
                       </td>
                     </tr>
                   );

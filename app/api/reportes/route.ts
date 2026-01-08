@@ -70,7 +70,7 @@ export async function GET(req: Request) {
           else if (horaDecimal >= 16) { salida = m.fecha_hora; }
         });
 
-        const fmt = (d: Date | null) => d ? d.toLocaleTimeString('es-EC', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'S/M';
+        const fmt = (dt: Date | null) => dt ? dt.toLocaleTimeString('es-EC', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'S/M';
         
         const hEnt = fmt(entrada);
         const hSal = fmt(salida);
@@ -88,28 +88,35 @@ export async function GET(req: Request) {
           if (hEnt === 'S/M') {
             novedad = "SIN REGISTRO";
           } else if (hEnt <= HORA_LEGAL_ENTRADA) {
-            // Antes de las 08:30, se marca como 08:30
             inicioReal = HORA_LEGAL_ENTRADA;
             novedad = "NORMAL";
           } else if (hEnt <= HORA_LIMITE_TOLERANCIA) {
-            // Entre 08:31 y 08:45, es NORMAL (Tolerancia)
             inicioReal = hEnt;
             novedad = "NORMAL (TOLERANCIA)";
           } else {
-            // Después de las 08:45 es ATRASO real
             inicioReal = hEnt;
             novedad = "ATRASO";
           }
         }
 
-        // Cálculos de Tiempos
-        const totalDescanso = (iniDescanso && finDescanso) 
-          ? (finDescanso.getTime() - iniDescanso.getTime()) / 3600000 
-          : (esFinde || esFeriado || hEnt === 'S/M') ? 0 : 1;
+        // --- CÁLCULOS DE TIEMPOS (SOLUCIÓN DEFINITIVA PARA BUILD) ---
 
-        const jornadaBruta = (entrada && salida) ? (salida.getTime() - entrada.getTime()) / 3600000 : 0;
-        const horasTrabajadas = Math.max(0, jornadaBruta - totalDescanso);
+// 1. Forzamos el reconocimiento de los valores como fechas u opcionales
+const dIni = iniDescanso as Date | null;
+const dFin = finDescanso as Date | null;
+const dEnt = entrada as Date | null;
+const dSal = salida as Date | null;
 
+// 2. Usamos validación simple. TypeScript ahora permitirá getTime() tras la aserción
+const totalDescanso = (dIni && dFin) 
+  ? (dFin.getTime() - dIni.getTime()) / 3600000 
+  : (esFinde || esFeriado || hEnt === 'S/M') ? 0 : 1;
+
+const jornadaBruta = (dEnt && dSal) 
+  ? (dSal.getTime() - dEnt.getTime()) / 3600000 
+  : 0;
+
+const horasTrabajadas = Math.max(0, jornadaBruta - totalDescanso);
         // Horas Extras y Menos
         const extras = (horasTrabajadas > 8 && !esFinde && !esFeriado) ? horasTrabajadas - 8 : 0;
         const menos = (horasTrabajadas < 8 && horasTrabajadas > 0 && !esFinde && !esFeriado) ? 8 - horasTrabajadas : 0;

@@ -3,22 +3,30 @@ import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 
 export default function ReporteAsistencia() {
-  const [marcaciones, setMarcaciones] = useState([]);
+  // Definimos marcaciones como any[] para evitar el error de tipo 'never'
+  const [marcaciones, setMarcaciones] = useState<any[]>([]);
 
   useEffect(() => {
-    fetch('/api/asistencia/listar').then(res => res.json()).then(setMarcaciones);
+    fetch('/api/asistencia/listar')
+      .then(res => res.json())
+      .then(data => setMarcaciones(Array.isArray(data) ? data : []));
   }, []);
 
   const exportarFormatoMacro = () => {
     // Ordenar por Fecha y ID (Menor a Mayor)
-    const dataOrdenada = [...marcaciones].sort((a, b) => {
+    // Tipamos los argumentos del sort como any
+    const dataOrdenada = [...marcaciones].sort((a: any, b: any) => {
       const fA = new Date(a.fecha_hora).getTime();
       const fB = new Date(b.fecha_hora).getTime();
       if (fA !== fB) return fA - fB;
-      return parseInt(a.funcionarios?.codigo_biometrico) - parseInt(b.funcionarios?.codigo_biometrico);
+      
+      // Aseguramos que el parseo sea seguro con valores por defecto
+      const codA = parseInt(a.funcionarios?.codigo_biometrico || '0');
+      const codB = parseInt(b.funcionarios?.codigo_biometrico || '0');
+      return codA - codB;
     });
 
-    const rows = dataOrdenada.map(m => ({
+    const rows = dataOrdenada.map((m: any) => ({
       "FECHA_MARCACION": new Date(m.fecha_hora).toLocaleDateString('es-EC'),
       "HORA_MARCACION": new Date(m.fecha_hora).toLocaleTimeString('es-EC', { hour12: false }),
       "CODIGO_BIOMETRICO": m.funcionarios?.codigo_biometrico
