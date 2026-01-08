@@ -2,32 +2,21 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
 /**
- * Convierte el serial de Excel (ej: 45678.35) a un objeto Date real.
- * Ajusta la zona horaria según sea necesario.
- */
-function excelSerialAFecha(serial: number) {
-  // Excel base es 30/12/1899
-  const fechaUnix = Math.round((serial - 25569) * 86400 * 1000);
-  const fecha = new Date(fechaUnix);
-  // Si el servidor está en UTC y necesitas hora Ecuador (UTC-5), 
-  // no sumes horas aquí si la data ya viene en hora local.
-  return fecha;
-}
-
-/**
- * Limpia y parsea la fecha dependiendo del origen.
+ * Procesa la fecha de Excel de forma robusta.
+ * Se asegura de que no haya desfases por zonas horarias del servidor.
  */
 function limpiarFecha(valor: any) {
   if (!valor) return null;
   try {
-    // Si es un número (serial de Excel)
-    if (!isNaN(valor) && typeof valor !== 'string') {
-      return excelSerialAFecha(parseFloat(valor));
+    // Caso: Serial de Excel (Número)
+    if (typeof valor === 'number' || (!isNaN(valor) && !isNaN(parseFloat(valor)))) {
+      const serial = parseFloat(valor);
+      const fechaUnix = Math.round((serial - 25569) * 86400 * 1000);
+      return new Date(fechaUnix);
     }
     
-    // Si es un string (ej: "01/15/2026 08:30 AM")
-    const texto = String(valor).trim();
-    const d = new Date(texto);
+    // Caso: String (ISO o formato común)
+    const d = new Date(String(valor).trim());
     return isNaN(d.getTime()) ? null : d;
   } catch (e) { 
     return null; 
@@ -37,99 +26,92 @@ function limpiarFecha(valor: any) {
 export async function POST(req: Request) {
   try {
     const { tipo, datos } = await req.json();
+    if (!datos || !Array.isArray(datos)) throw new Error("Formato de datos inválido");
+
+    // 1. CACHÉ DE FUNCIONARIOS: Cargamos todos una vez para no consultar la DB en cada iteración
+    const todosLosFuncionarios = await db.funcionarios.findMany({
+      select: { funcionario_id: true, codigo_biometrico: true, codigo_teams: true }
+    });
+
     let procesados = 0;
+    const operaciones = [];
 
+    // 2. PROCESAMIENTO SEGÚN ORIGEN
     for (const fila of datos) {
-      let funcionario = null;
+      let funcionario;
 
-      // --- CASO 1: IMPORTACIÓN DESDE TEAMS ---
       if (tipo === 'TEAMS') {
-        const nombreTeams = fila['Nombre del empleado'];
-        if (!nombreTeams) continue;
-
-        funcionario = await db.funcionarios.findFirst({ 
-          where: { codigo_teams: String(nombreTeams).trim() } 
-        });
+        const nombreTeams = String(fila['Nombre del empleado'] || '').trim();
+        funcionario = todosLosFuncionarios.find(f => f.codigo_teams === nombreTeams);
 
         if (funcionario) {
-          // Extraemos las 4 columnas posibles de marcación por fila
           const columnasTeams = [
             { col: 'Hora de entrada', tipo: 'ENTRADA' },
-            { col: 'Hora de inicio del descanso', tipo: 'SALIDA' }, // Inicio descanso es una salida
-            { col: 'Hora de finalización del descanso', tipo: 'ENTRADA' }, // Fin descanso es entrada
+            { col: 'Hora de inicio del descanso', tipo: 'SALIDA' },
+            { col: 'Hora de finalización del descanso', tipo: 'ENTRADA' },
             { col: 'Hora de salida', tipo: 'SALIDA' }
           ];
 
           for (const item of columnasTeams) {
             const fechaVal = limpiarFecha(fila[item.col]);
-            
             if (fechaVal) {
-              await db.marcaciones.upsert({
-                where: {
-                  idx_prevencion_duplicados: {
-                    funcionario_id: funcionario.funcionario_id,
-                    fecha_hora: fechaVal,
-                    tipo_marcacion: item.tipo
-                  }
-                },
-                update: { sincronizado: true },
-                create: {
-                  funcionario_id: funcionario.funcionario_id,
-                  fecha_hora: fechaVal,
-                  tipo_marcacion: item.tipo,
-                  dispositivo: 'TEAMS',
-                  sincronizado: true
-                }
-              });
-              procesados++;
+              operaciones.push(crearUpsert(funcionario.funcionario_id, fechaVal, item.tipo, 'TEAMS'));
             }
           }
         }
       } 
-      
-      // --- CASO 2: IMPORTACIÓN DESDE BIOMÉTRICO ---
       else if (tipo === 'BIOMETRICO') {
         const idBio = String(fila['ID de Usuario'] || '').trim();
         const tiempoRaw = fila['Tiempo'];
-
-        if (!idBio || !tiempoRaw) continue;
-
-        funcionario = await db.funcionarios.findFirst({ 
-          where: { codigo_biometrico: idBio } 
-        });
+        funcionario = todosLosFuncionarios.find(f => f.codigo_biometrico === idBio);
 
         const fechaFinal = limpiarFecha(tiempoRaw);
-
         if (funcionario && fechaFinal) {
-          // Lógica de detección de tipo para Biométrico
           const estadoRaw = String(fila['Estado'] || fila['Evento'] || '').toLowerCase();
           const tipoM = (estadoRaw.includes('sal') || estadoRaw.includes('out')) ? 'SALIDA' : 'ENTRADA';
-
-          await db.marcaciones.upsert({
-            where: {
-              idx_prevencion_duplicados: {
-                funcionario_id: funcionario.funcionario_id,
-                fecha_hora: fechaFinal,
-                tipo_marcacion: tipoM
-              }
-            },
-            update: { sincronizado: true },
-            create: {
-              funcionario_id: funcionario.funcionario_id,
-              fecha_hora: fechaFinal,
-              tipo_marcacion: tipoM,
-              dispositivo: 'BIOMETRICO',
-              sincronizado: true
-            }
-          });
-          procesados++;
+          operaciones.push(crearUpsert(funcionario.funcionario_id, fechaFinal, tipoM, 'BIOMETRICO'));
         }
       }
     }
 
+    // 3. EJECUCIÓN EN TRANSACCIÓN POR LOTES (Batching)
+    // Para no saturar la conexión, procesamos de 50 en 50
+    const chunks = [];
+    for (let i = 0; i < operaciones.length; i += 50) {
+      chunks.push(operaciones.slice(i, i + 50));
+    }
+
+    for (const chunk of chunks) {
+      await db.$transaction(chunk);
+      procesados += chunk.length;
+    }
+
     return NextResponse.json({ success: true, registros: procesados });
   } catch (error: any) {
-    console.error("ERROR IMPORTACIÓN:", error.message);
+    console.error("🚨 ERROR IMPORTACIÓN:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+}
+
+/**
+ * Helper para generar la estructura de Upsert de Prisma
+ */
+function crearUpsert(fId: number, fecha: Date, tipo: string, disp: string) {
+  return db.marcaciones.upsert({
+    where: {
+      idx_prevencion_duplicados: {
+        funcionario_id: fId,
+        fecha_hora: fecha,
+        tipo_marcacion: tipo
+      }
+    },
+    update: { sincronizado: true },
+    create: {
+      funcionario_id: fId,
+      fecha_hora: fecha,
+      tipo_marcacion: tipo,
+      dispositivo: disp,
+      sincronizado: true
+    }
+  });
 }
