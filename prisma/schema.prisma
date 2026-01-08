@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model cargos {
+  cargo_id     Int            @id @default(autoincrement())
+  codigo_cargo String         @unique @db.VarChar(20)
+  nombre_cargo String         @db.VarChar(100)
+  nivel        Int?           @default(1)
+  salario_base Decimal?       @db.Decimal(10, 2)
+  descripcion  String?
+  created_at   DateTime?      @default(now()) @db.Timestamp(6)
+  updated_at   DateTime?      @default(now()) @db.Timestamp(6)
+  funcionarios funcionarios[]
+}
+
+model ciudades {
+  ciudad_id     Int            @id @default(autoincrement())
+  nombre_ciudad String         @db.VarChar(100)
+  codigo_postal String?        @db.VarChar(10)
+  provincia     String?        @db.VarChar(100)
+  pais          String?        @default("Ecuador") @db.VarChar(50)
+  created_at    DateTime?      @default(now()) @db.Timestamp(6)
+  funcionarios  funcionarios[]
+}
+
+model configuraciones {
+  config_id   Int       @id @default(autoincrement())
+  clave       String    @unique @db.VarChar(50)
+  valor       String?
+  descripcion String?
+  categoria   String?   @db.VarChar(50)
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @default(now()) @db.Timestamp(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model funcionarios {
+  funcionario_id                                     Int                      @id @default(autoincrement())
+  codigo_unico                                       String                   @unique @db.VarChar(20)
+  tipo_identificacion                                String?                  @default("CEDULA") @db.VarChar(20)
+  numero_identificacion                              String                   @unique @db.VarChar(20)
+  apellidos                                          String                   @db.VarChar(100)
+  nombres                                            String                   @db.VarChar(100)
+  fecha_nacimiento                                   DateTime?                @db.Date
+  genero                                             String?                  @db.VarChar(10)
+  estado_civil                                       String?                  @db.VarChar(20)
+  fecha_ingreso                                      DateTime                 @db.Date
+  fecha_salida                                       DateTime?                @db.Date
+  cargo_id                                           Int
+  proyecto_id                                        Int
+  estado                                             String?                  @default("ACTIVO") @db.VarChar(20)
+  correo                                             String                   @unique @db.VarChar(150)
+  ciudad_id                                          Int
+  telefono                                           String?                  @db.VarChar(20)
+  celular                                            String?                  @db.VarChar(20)
+  direccion                                          String?
+  foto_url                                           String?                  @db.VarChar(255)
+  tipo_contrato                                      String?                  @default("INDEFINIDO") @db.VarChar(20)
+  jornada                                            String?                  @default("TIEMPO_COMPLETO") @db.VarChar(20)
+  supervisor_id                                      Int?
+  codigo_biometrico                                  String?                  @unique @db.VarChar(50)
+  codigo_teams                                       String?                  @unique @db.VarChar(50)
+  usuario_ad                                         String?                  @unique @db.VarChar(50)
+  created_at                                         DateTime?                @default(now()) @db.Timestamp(6)
+  updated_at                                         DateTime?                @default(now()) @db.Timestamp(6)
+  created_by                                         String?                  @db.VarChar(50)
+  updated_by                                         String?                  @db.VarChar(50)
+  cargos                                             cargos                   @relation(fields: [cargo_id], references: [cargo_id], onDelete: NoAction, onUpdate: NoAction)
+  ciudades                                           ciudades                 @relation(fields: [ciudad_id], references: [ciudad_id], onDelete: NoAction, onUpdate: NoAction)
+  proyectos                                          proyectos                @relation(fields: [proyecto_id], references: [proyecto_id], onDelete: NoAction, onUpdate: NoAction)
+  funcionarios                                       funcionarios?            @relation("funcionariosTofuncionarios", fields: [supervisor_id], references: [funcionario_id], onDelete: NoAction, onUpdate: NoAction)
+  other_funcionarios                                 funcionarios[]           @relation("funcionariosTofuncionarios")
+  historial_funcionarios                             historial_funcionarios[]
+  marcaciones                                        marcaciones[]
+  permisos_permisos_aprobado_porTofuncionarios       permisos[]               @relation("permisos_aprobado_porTofuncionarios")
+  permisos_permisos_funcionario_idTofuncionarios     permisos[]               @relation("permisos_funcionario_idTofuncionarios")
+  saldo_vacaciones                                   saldo_vacaciones[]
+  vacaciones_vacaciones_aprobado_porTofuncionarios   vacaciones[]             @relation("vacaciones_aprobado_porTofuncionarios")
+  vacaciones_vacaciones_funcionario_idTofuncionarios vacaciones[]             @relation("vacaciones_funcionario_idTofuncionarios")
+
+  @@index([codigo_unico], map: "idx_funcionarios_codigo_unico")
+  @@index([estado], map: "idx_funcionarios_estado")
+  @@index([fecha_ingreso], map: "idx_funcionarios_fecha_ingreso")
+  @@index([proyecto_id], map: "idx_funcionarios_proyecto")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model historial_funcionarios {
+  historial_id     Int          @id @default(autoincrement())
+  funcionario_id   Int
+  campo_modificado String?      @db.VarChar(50)
+  valor_anterior   String?
+  valor_nuevo      String?
+  fecha_cambio     DateTime?    @default(now()) @db.Timestamp(6)
+  usuario_cambio   String?      @db.VarChar(50)
+  tipo_cambio      String?      @db.VarChar(20)
+  funcionarios     funcionarios @relation(fields: [funcionario_id], references: [funcionario_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model logs_sistema {
+  log_id     Int       @id @default(autoincrement())
+  usuario    String?   @db.VarChar(50)
+  accion     String?   @db.VarChar(100)
+  modulo     String?   @db.VarChar(50)
+  detalles   String?
+  ip_address String?   @db.VarChar(45)
+  fecha_hora DateTime? @default(now()) @db.Timestamp(6)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model marcaciones {
+  marcacion_id   Int          @id @default(autoincrement())
+  funcionario_id Int
+  tipo_marcacion String       @db.VarChar(20)
+  fecha_hora     DateTime     @db.Timestamp(6)
+  dispositivo    String?      @default("BIOMETRICO") @db.VarChar(20)
+  ubicacion      String?      @db.VarChar(255)
+  ip_address     String?      @db.VarChar(45)
+  observaciones  String?
+  sincronizado   Boolean?     @default(false)
+  created_at     DateTime?    @default(now()) @db.Timestamp(6)
+  funcionarios   funcionarios @relation(fields: [funcionario_id], references: [funcionario_id], onDelete: NoAction, onUpdate: NoAction)
+
+  // ESTA ES LA RESTRICCIÓN PARA EVITAR DUPLICADOS POR ARCHIVOS REPETIDOS
+  @@unique([funcionario_id, fecha_hora, tipo_marcacion], name: "idx_prevencion_duplicados")
+  
+  @@index([fecha_hora], map: "idx_marcaciones_fecha")
+  @@index([funcionario_id, fecha_hora], map: "idx_marcaciones_fecha_funcionario")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model permisos {
+  permiso_id                                         Int           @id @default(autoincrement())
+  funcionario_id                                     Int
+  fecha                                              DateTime      @db.Date
+  tipo_permiso                                       String?       @default("PERSONAL") @db.VarChar(20)
+  horas                                              Decimal?      @db.Decimal(4, 2)
+  motivo                                             String?
+  estado                                             String?       @default("PENDIENTE") @db.VarChar(20)
+  aprobado_por                                       Int?
+  created_at                                         DateTime?     @default(now()) @db.Timestamp(6)
+  funcionarios_permisos_aprobado_porTofuncionarios   funcionarios? @relation("permisos_aprobado_porTofuncionarios", fields: [aprobado_por], references: [funcionario_id], onDelete: NoAction, onUpdate: NoAction)
+  funcionarios_permisos_funcionario_idTofuncionarios funcionarios  @relation("permisos_funcionario_idTofuncionarios", fields: [funcionario_id], references: [funcionario_id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model proyectos {
+  proyecto_id     Int            @id @default(autoincrement())
+  codigo_proyecto String         @unique @db.VarChar(20)
+  nombre_proyecto String         @db.VarChar(100)
+  descripcion     String?
+  presupuesto     Decimal?       @db.Decimal(15, 2)
+  fecha_inicio    DateTime?      @db.Date
+  fecha_fin       DateTime?      @db.Date
+  estado          String?        @default("ACTIVO") @db.VarChar(20)
+  created_at      DateTime?      @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?      @default(now()) @db.Timestamp(6)
+  funcionarios    funcionarios[]
+}
+
+model saldo_vacaciones {
+  saldo_id        Int          @id @default(autoincrement())
+  funcionario_id  Int
+  anio            Int
+  dias_acumulados Decimal?     @default(0) @db.Decimal(5, 2)
+  dias_tomados    Decimal?     @default(0) @db.Decimal(5, 2)
+  dias_pendientes Decimal?     @default(0) @db.Decimal(5, 2)
+  funcionarios    funcionarios @relation(fields: [funcionario_id], references: [funcionario_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([funcionario_id, anio])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model vacaciones {
+  vacacion_id                                          Int           @id @default(autoincrement())
+  funcionario_id                                       Int
+  fecha_inicio                                         DateTime      @db.Date
+  fecha_fin                                            DateTime      @db.Date
+  dias_totales                                         Int
+  estado                                               String?       @default("PENDIENTE") @db.VarChar(20)
+  observaciones                                        String?
+  aprobado_por                                         Int?
+  created_at                                           DateTime?     @default(now()) @db.Timestamp(6)
+  updated_at                                           DateTime?     @default(now()) @db.Timestamp(6)
+  funcionarios_vacaciones_aprobado_porTofuncionarios   funcionarios? @relation("vacaciones_aprobado_porTofuncionarios", fields: [aprobado_por], references: [funcionario_id], onDelete: NoAction, onUpdate: NoAction)
+  funcionarios_vacaciones_funcionario_idTofuncionarios funcionarios  @relation("vacaciones_funcionario_idTofuncionarios", fields: [funcionario_id], references: [funcionario_id], onDelete: NoAction, onUpdate: NoAction)
+}
